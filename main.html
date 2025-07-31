@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Warung PRO (Kasir + Karyawan + Kasbon + Laporan)</title>
+  <title>Genz Haircut Panel Kasir</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
@@ -25,7 +25,34 @@
     *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',sans-serif;}
     body{background:var(--bg-page);color:var(--text-main);}
     header{background:var(--brand-main);color:#fff;padding:16px;text-align:center;font-size:1.5rem;font-weight:600;position:sticky;top:0;z-index:100;}
-    .menu{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;background:var(--brand-accent);padding:10px;position:sticky;top:64px;z-index:90;}
+   .menu{
+  position:relative;
+  background:var(--brand-accent);
+  padding:10px 16px;
+  position:sticky;
+  top:64px;
+  z-index:90;
+}
+
+.menu-center{
+  display:flex;
+  gap:8px;
+  justify-content:center; /* tetap center */
+}
+
+.menu-right{
+  position:absolute;
+  right:16px;
+  top:50%;
+  transform:translateY(-50%);
+}
+
+.menu-right button{
+  font-size:0.9rem;
+  padding:8px 14px;
+}
+
+
     .menu button{background:#fff;color:var(--brand-main);border:none;border-radius:var(--radius-md);padding:8px 18px;font-size:0.95rem;font-weight:600;cursor:pointer;transition:all .15s;}
     .menu button:hover,.menu button.active{background:var(--brand-main);color:#fff;}
     .content-wrapper{max-width:1100px;margin:0 auto;padding:24px 16px;}
@@ -68,6 +95,31 @@
     @media(max-width:600px){
       .product-card{grid-template-columns:1fr 60px 100px 60px 60px;}
     }
+
+    /* ======== STYLE MODAL KONFIRMASI ======== */
+.modal {
+  display:none;
+  position:fixed;
+  top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,0.5);
+  justify-content:center;
+  align-items:center;
+  z-index:999;
+}
+.modal-content {
+  background:#fff;
+  padding:20px;
+  border-radius:10px;
+  text-align:center;
+  max-width:300px;
+  width:90%;
+}
+.modal-actions {
+  display:flex;
+  justify-content:space-between;
+  margin-top:15px;
+}
+
   </style>
   <script src="auth.js"></script>
   <script>
@@ -84,16 +136,22 @@
 <body>
   <header>GENZ PANEL</header>
 
-  <div class="menu">
+ <div class="menu">
+  <div class="menu-center">
     <button id="menu-karyawan">Karyawan</button>
     <button id="menu-minuman">Minuman</button>
     <button id="menu-laporan">Laporan</button>
     <button id="menu-history">Pemasukan</button>
     <button id="menu-calc">Kalkulator</button>
   </div>
+  <div class="menu-right">
+    <button id="logout-btn" class="btn btn-danger">Logout</button>
+  </div>
+</div>
+
 
   <div class="content-wrapper">
-    <button id="logout-btn" class="btn btn-danger" style="float:right; margin-bottom:10px;">Logout</button>
+   
     <!-- ============ PANEL KARYAWAN (TAB) ============ -->
     <section class="panel active" id="panel-karyawan">
       <div class="panel-header">
@@ -252,11 +310,16 @@
       </form>
       <div class="table-wrapper" style="max-height: 300px; overflow-y: auto;">
         <table>
-          <thead><tr><th>Tanggal</th><th>Jumlah Pemasukan</th></tr></thead>
-          <tbody id="history-tbody"></tbody>
-        </table>
-      </div>
-    </section>
+  <thead>
+    <tr>
+      <th>Tanggal</th>
+      <th>Jumlah Pemasukan</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody id="history-tbody"></tbody>
+</table>
+
 
     <!-- ============ PANEL KALKULATOR (TAB) ============ -->
     <section class="panel" id="panel-calc">
@@ -448,18 +511,60 @@
       window.chartHarian=new Chart(ctx,{ type:'bar', data:{labels,datasets:[{label:'Pendapatan Harian',data,backgroundColor:'#7b2cbf'}]}, options:{responsive:true,scales:{y:{beginAtZero:true}}}});
     }
 
-    /* === History === */
-    const renderHistory = () => {
-      const tbody = document.getElementById("history-tbody");
-      tbody.innerHTML = "";
-      const entries = Object.entries(laporanHarian).sort((a,b) => new Date(b[0]) - new Date(a[0]));
-      entries.forEach(([date, data]) => {
-        const pemasukan = typeof data === "number" ? data : (data.income || 0);
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${date}</td><td>${formatRupiah(pemasukan)}</td>`;
-        tbody.appendChild(tr);
+/* === History === */
+const renderHistory = () => {
+  const tbody = document.getElementById("history-tbody");
+  tbody.innerHTML = "";
+  const entries = Object.entries(laporanHarian).sort((a,b) => new Date(b[0]) - new Date(a[0]));
+
+  entries.forEach(([date, data]) => {
+    const pemasukan = typeof data === "number" ? data : (data.income || 0);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${date}</td>
+      <td>${formatRupiah(pemasukan)}</td>
+      <td class="actions">
+        <button class="btn btn-primary btn-edit" data-date="${date}">Edit</button>
+        <button class="btn btn-danger btn-del" data-date="${date}">Hapus</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Event Edit
+  tbody.querySelectorAll(".btn-edit").forEach(btn => {
+    btn.onclick = () => {
+      const date = btn.dataset.date;
+      const amount = typeof laporanHarian[date] === "number" ? laporanHarian[date] : laporanHarian[date].income || 0;
+      document.getElementById("history-date").value = formatDateForInput(date);
+      document.getElementById("history-amount").value = amount.toLocaleString("id-ID");
+    };
+  });
+
+  // Event Hapus pakai showConfirm modal
+  tbody.querySelectorAll(".btn-del").forEach(btn => {
+    btn.onclick = () => {
+      showConfirm("Yakin mau hapus data ini?", () => {
+        delete laporanHarian[btn.dataset.date];
+        saveLocal();
+        renderHistory();
+        renderChart();
       });
     };
+  });
+};
+
+
+// Helper buat format tanggal ke input date
+function formatDateForInput(dateStr) {
+  const parts = dateStr.split(/[\/-]/);
+  if (parts[0].length === 4) {
+    return dateStr; // sudah format yyyy-mm-dd
+  }
+  // kalau format dd/mm/yyyy -> yyyy-mm-dd
+  return `${parts[2]}-${parts[1].padStart(2,"0")}-${parts[0].padStart(2,"0")}`;
+}
+
 
     /* === Kalkulator === */
     document.getElementById("calculate-btn").onclick=()=>{
@@ -638,6 +743,41 @@
       logout();
       window.location.href = "login.html";
     };
+
+    
   </script>
+
+
+
+  <!-- ======== MODAL KONFIRMASI HAPUS ======== -->
+<div id="confirm-modal" class="modal">
+  <div class="modal-content">
+    <p id="confirm-message">Yakin mau hapus data ini?</p>
+    <div class="modal-actions">
+      <button id="confirm-yes" class="btn btn-danger">Hapus</button>
+      <button id="confirm-no" class="btn btn-primary">Batal</button>
+    </div>
+  </div>
+</div>
+
+  <footer style="text-align:center; padding:20px; font-size:1rem; color:#7b2cbf; background: #f0e6ff; font-weight: 700; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); margin-top: 40px; border-radius: 8px;">
+    &copy; 2024 Powfu. All rights reserved.
+  </footer>
+  <script>
+    // Add footer copyright to each tab panel
+    document.querySelectorAll('.panel').forEach(panel => {
+      const footerClone = document.createElement('div');
+      footerClone.style.textAlign = 'center';
+      footerClone.style.padding = '12px';
+      footerClone.style.fontSize = '0.85rem';
+      footerClone.style.color = '#7b2cbf';
+      footerClone.style.background = '#f0e6ff';
+      footerClone.style.fontWeight = '700';
+      footerClone.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.1)';
+      footerClone.style.marginTop = '20px';
+      footerClone.style.borderRadius = '8px';
+      footerClone.textContent = '© 2024 Powfu. All rights reserved.';
+      panel.appendChild(footerClone);
+    });
 </body>
 </html>
