@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Warung PRO (Kasir + Karyawan + Kasbon + Laporan)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --brand-main:#7b2cbf;
+      --brand-main-hover:#5a189a;
+      --brand-accent:#9d4edd;
+      --danger:#e63946;
+      --danger-hover:#c72f3c;
+      --radius-md:8px;
+      --radius-lg:16px;
+      --shadow-md:0 2px 8px rgba(0,0,0,.18);
+      --bg-page:#f5f5f5;
+      --bg-panel:#ffffff;
+      --text-main:#1b1b1b;
+      --text-muted:#666;
+      --table-head-bg:var(--brand-main);
+      --table-head-text:#fff;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',sans-serif;}
+    body{background:var(--bg-page);color:var(--text-main);}
+    header{background:var(--brand-main);color:#fff;padding:16px;text-align:center;font-size:1.5rem;font-weight:600;position:sticky;top:0;z-index:100;}
+    .menu{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;background:var(--brand-accent);padding:10px;position:sticky;top:64px;z-index:90;}
+    .menu button{background:#fff;color:var(--brand-main);border:none;border-radius:var(--radius-md);padding:8px 18px;font-size:0.95rem;font-weight:600;cursor:pointer;transition:all .15s;}
+    .menu button:hover,.menu button.active{background:var(--brand-main);color:#fff;}
+    .content-wrapper{max-width:1100px;margin:0 auto;padding:24px 16px;}
+
+    /* TAB panel (yang ditoggle menu) */
+    .panel{display:none;margin-bottom:48px;background:var(--bg-panel);padding:24px;border-radius:var(--radius-lg);box-shadow:var(--shadow-md);}
+    .panel.active{display:block;}
+    .panel-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;}
+    .panel-header h2{font-size:1.25rem;font-weight:700;}
+    .panel-metric{font-weight:700;font-size:1rem;color:var(--brand-main);}
+
+    /* Subpanel di dalam tab (selalu tampil) */
+    .subpanel{background:#fff;padding:20px;border-radius:var(--radius-lg);box-shadow:var(--shadow-md);margin-top:20px;}
+
+    .btn{border:none;border-radius:var(--radius-md);padding:8px 16px;font-weight:700;cursor:pointer;transition:.15s;}
+    .btn-primary{background:var(--brand-main);color:#fff;}
+    .btn-primary:hover{background:var(--brand-main-hover);}
+    .btn-danger{background:var(--danger);color:#fff;}
+    .btn-danger:hover{background:var(--danger-hover);}
+
+    .card-list{display:flex;flex-direction:column;gap:12px;}
+    .product-card{display:grid;grid-template-columns:1fr 80px 130px 80px 80px;background:#fff;align-items:center;gap:12px;padding:10px;border-radius:var(--radius-md);}
+    .product-card .name{font-weight:600;}
+    .product-card .point{text-align:center;font-weight:600;}
+    .product-card .value{text-align:right;font-weight:600;}
+
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:16px;}
+    .form-field label{font-size:0.85rem;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px;}
+    .form-field input,.form-field select{width:100%;padding:8px;border:1px solid #ccc;border-radius:var(--radius-md);}
+
+    .table-wrapper{overflow:auto;max-height:50vh;border-radius:var(--radius-md);margin-top:8px;}
+    table{width:100%;border-collapse:collapse;background:#fff;font-size:0.95rem;}
+    table thead{position:sticky;top:0;background:var(--table-head-bg);color:#fff;}
+    table th,table td{padding:10px;border-bottom:1px solid #ddd;}
+    table td.num{text-align:right;}
+    table td.actions{text-align:center;}
+    table button.del-btn{background:var(--danger);color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:0.85rem;}
+    #gaji-list{margin-top:16px;}
+
+    @media(max-width:600px){
+      .product-card{grid-template-columns:1fr 60px 100px 60px 60px;}
+    }
+  </style>
+</head>
+<body>
+  <header>GENZ PANEL</header>
+
+  <div class="menu">
+    <button id="menu-karyawan">Karyawan</button>
+    <button id="menu-minuman">Minuman</button>
+    <button id="menu-laporan">Laporan</button>
+    <button id="menu-history">Pemasukan</button>
+    <button id="menu-calc">Kalkulator</button>
+  </div>
+
+  <div class="content-wrapper">
+    <!-- ============ PANEL KARYAWAN (TAB) ============ -->
+    <section class="panel active" id="panel-karyawan">
+      <div class="panel-header">
+        <h2>Data Karyawan</h2>
+        <div class="panel-actions">
+          <div class="panel-metric" id="total-value">Total Uang Masuk: Rp 0</div>
+          <button class="btn btn-danger" id="reset-karyawan">Reset</button>
+        </div>
+      </div>
+
+      <!-- List Poin Karyawan -->
+      <div id="product-list" class="card-list"></div>
+
+      <!-- === KASBON (subpanel) === -->
+      <div class="subpanel">
+        <div class="panel-header"><h3>Kasbon Karyawan</h3></div>
+        <form id="kasbon-form" onsubmit="return false;">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="kasbon-karyawan">Karyawan</label>
+              <select id="kasbon-karyawan"></select>
+            </div>
+            <div class="form-field">
+              <label for="kasbon-item">Item</label>
+              <input type="text" id="kasbon-item" placeholder="Contoh: Kopi" />
+            </div>
+            <div class="form-field">
+              <label for="kasbon-amount">Nominal (Rp)</label>
+              <input type="text" id="kasbon-amount" placeholder="0" />
+            </div>
+            <div class="form-field" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="kasbon-add-btn" style="flex:1;">+ Tambah</button>
+              <button class="btn btn-danger" id="kasbon-reset-btn" style="flex:1;">Reset</button>
+            </div>
+          </div>
+        </form>
+        <!-- TABEL KASBON (dipindah ke sini) -->
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Tanggal</th><th>Karyawan</th><th>Item</th><th class="num">Nominal</th><th>Aksi</th></tr>
+            </thead>
+            <tbody id="kasbon-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- === PENGELUARAN TOKO (subpanel) === -->
+      <div class="subpanel">
+        <div class="panel-header"><h3>Pengeluaran Toko</h3></div>
+        <form id="pengeluaran-form" onsubmit="return false;">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="pengeluaran-item">Item</label>
+              <input type="text" id="pengeluaran-item" placeholder="Contoh: Gas Elpiji" />
+            </div>
+            <div class="form-field">
+              <label for="pengeluaran-nominal">Nominal (Rp)</label>
+              <input type="text" id="pengeluaran-nominal" placeholder="0" />
+            </div>
+            <div class="form-field">
+              <label for="pengeluaran-tanggal">Tanggal</label>
+              <input type="date" id="pengeluaran-tanggal" />
+            </div>
+            <div class="form-field" style="display:flex;gap:8px;">
+              <button class="btn btn-primary" id="pengeluaran-add">+ Tambah</button>
+              <button class="btn btn-danger" id="pengeluaran-reset">Reset Semua</button>
+            </div>
+          </div>
+        </form>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Tanggal</th><th>Item</th><th class="num">Nominal</th><th>Aksi</th></tr></thead>
+            <tbody id="pengeluaran-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- === LAYANAN JASA (subpanel) === -->
+      <div class="subpanel">
+        <div class="panel-header"><h3>Layanan Jasa</h3></div>
+        <form id="layanan-form" onsubmit="return false;">
+          <div class="form-grid">
+            <div class="form-field">
+              <label>Pilih Layanan</label>
+              <select id="layanan-select">
+                <option value="Haircut|20000">Haircut - Rp20.000</option>
+                <option value="Haircut + Keramas + Hairtonic|30000">Haircut + Keramas + Hairtonic - Rp30.000</option>
+                <option value="Shaving|5000">Shaving - Rp5.000</option>
+                <option value="Hairtatto|5000">Hairtatto - Rp5.000</option>
+                <option value="Black Coloring|40000">Black Coloring - Rp40.000</option>
+                <option value="Hairlight|150000">Hairlight - Rp150.000</option>
+                <option value="Full Coloring|200000">Full Coloring - Rp200.000</option>
+                <option value="Hairtonic|35000">Hairtonic - Rp35.000</option>
+                <option value="Hairpowder|35000">Hairpowder - Rp35.000</option>
+                <option value="Pomade|35000">Pomade - Rp35.000</option>
+                <option value="Minoxidil|150000">Minoxidil - Rp150.000</option>
+              </select>
+            </div>
+            <div class="form-field" style="display:flex;gap:8px;">
+              <button class="btn btn-primary" id="layanan-add-btn" style="flex:1;">+ Tambah</button>
+            </div>
+          </div>
+        </form>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Tanggal</th><th>Layanan</th><th class="num">Nominal</th><th>Aksi</th></tr>
+            </thead>
+            <tbody id="layanan-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PANEL MINUMAN (TAB) ============ -->
+    <section class="panel" id="panel-minuman">
+      <div class="panel-header">
+        <h2>Produk Minuman</h2>
+        <div class="panel-actions">
+          <div class="panel-metric" id="total-drinks">Total Minuman: Rp 0</div>
+          <button class="btn btn-danger" id="reset-minuman">Reset</button>
+        </div>
+      </div>
+      <div id="drink-list" class="card-list"></div>
+    </section>
+
+    <!-- ============ PANEL LAPORAN (TAB) ============ -->
+    <section class="panel" id="panel-laporan">
+      <div class="panel-header"><h2>Laporan Harian</h2></div>
+      <canvas id="chart-harian" style="max-height:300px;"></canvas>
+      <canvas id="chart-traffic" style="max-height:300px;margin-top:24px;"></canvas>
+      <div id="gaji-list"></div>
+      <button class="btn btn-primary" id="calc-gaji" style="margin-top:12px;">Hitung Gaji</button>
+    </section>
+
+    <!-- ============ PANEL HISTORY (TAB) ============ -->
+    <section class="panel" id="panel-history">
+      <div class="panel-header"><h2>History Pemasukan Harian</h2></div>
+      <form id="history-form" onsubmit="return false;">
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="history-date">Tanggal</label>
+            <input type="date" id="history-date" />
+          </div>
+          <div class="form-field">
+            <label for="history-amount">Jumlah Pemasukan (Rp)</label>
+            <input type="text" id="history-amount" placeholder="0" />
+          </div>
+          <div class="form-field" style="display:flex;gap:8px;">
+            <button class="btn btn-primary" id="history-add-btn" style="flex:1;">+ Tambah / Update</button>
+            <button class="btn btn-danger" id="history-reset-btn" style="flex:1;">Reset History</button>
+            <button class="btn btn-primary" id="export-history-btn" style="margin-top:8px;">Export CSV</button>
+          </div>
+        </div>
+      </form>
+      <div class="table-wrapper" style="max-height: 300px; overflow-y: auto;">
+        <table>
+          <thead><tr><th>Tanggal</th><th>Jumlah Pemasukan</th></tr></thead>
+          <tbody id="history-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ PANEL KALKULATOR (TAB) ============ -->
+    <section class="panel" id="panel-calc">
+      <div class="panel-header"><h2>Kalkulator Kembalian</h2></div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Jumlah Uang Diterima</label>
+          <input type="text" id="amount-received" placeholder="Contoh: 50.000" />
+        </div>
+        <div class="form-field">
+          <label>Total Harga</label>
+          <input type="text" id="total-price" placeholder="Contoh: 30.000" />
+        </div>
+        <div class="form-field">
+          <label>Metode Bayar</label>
+          <select id="payment-method">
+            <option value="cash">Cash</option>
+            <option value="qris">QRIS</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="calculate-btn">Hitung</button>
+      <button class="btn btn-danger" id="reset-calc">Reset</button>
+      <div id="change-result" style="margin-top:10px;font-weight:700;color:var(--brand-main);"></div>
+    </section>
+  </div>
+
+  <script>
+    /* === DATA === */
+    const karyawanList = ["GENZ","GUGUN","UCUP","IPUL"];
+    const karyawanData = JSON.parse(localStorage.getItem("karyawanData")) || {};
+    const drinkData = JSON.parse(localStorage.getItem("drinkData")) || {};
+    const kasbonData = JSON.parse(localStorage.getItem("kasbonData")) || [];
+    const laporanHarian = JSON.parse(localStorage.getItem("laporanHarian")) || {};
+    const pengeluaranToko = JSON.parse(localStorage.getItem("pengeluaranToko")) || [];
+    const trafficData = JSON.parse(localStorage.getItem("trafficData")) || {};
+    const layananData = JSON.parse(localStorage.getItem("layananData")) || [];
+
+    const drinkList = [
+      {name:"Le Mineral",price:4000},
+      {name:"Teh Pucuk",price:5000},
+      {name:"Kopi",price:5000},
+      {name:"Susu",price:9000}
+    ];
+
+    const saveLocal = () => {
+      localStorage.setItem("karyawanData",JSON.stringify(karyawanData));
+      localStorage.setItem("drinkData",JSON.stringify(drinkData));
+      localStorage.setItem("kasbonData",JSON.stringify(kasbonData));
+      localStorage.setItem("laporanHarian",JSON.stringify(laporanHarian));
+      localStorage.setItem("pengeluaranToko", JSON.stringify(pengeluaranToko));
+      localStorage.setItem("trafficData", JSON.stringify(trafficData));
+      localStorage.setItem("layananData", JSON.stringify(layananData));
+    };
+    const formatRupiah = (num) => "Rp " + Number(num||0).toLocaleString('id-ID');
+    const cleanNumber = (str) => parseInt((str||"0").replace(/\D/g,""))||0;
+
+    /* === Karyawan === */
+    const calcKaryawanValue = (name,points)=>{
+      const n=name.toLowerCase();
+      if(n==="gugun"){return points<=15?points*9000:(15*9000)+((points-15)*13000);}
+      if(n==="genz"){return points*20000;}
+      return points<=15?points*8000:(15*8000)+((points-15)*13000);
+    };
+    const renderKaryawanList=()=>{
+      const cont=document.getElementById("product-list");
+      cont.innerHTML="";let total=0;
+      karyawanList.forEach(n=>{
+        if(!karyawanData[n])karyawanData[n]=0;
+        const card=document.createElement("div");card.className="product-card";
+        const name=document.createElement("span");name.className="name";name.textContent=n;
+        const pts=document.createElement("span");pts.className="point";pts.textContent=karyawanData[n];
+        const v=calcKaryawanValue(n,karyawanData[n]);const val=document.createElement("span");val.className="value";val.textContent=formatRupiah(v);total+=v;
+        const plus=document.createElement("button");plus.textContent="+";plus.onclick=()=>{
+          const before = calcKaryawanValue(n, karyawanData[n]);
+          karyawanData[n]++;
+          const after = calcKaryawanValue(n, karyawanData[n]);
+          recordDaily(after - before);
+          saveLocal();renderKaryawanList();
+        };
+        const min=document.createElement("button");min.textContent="-";min.onclick=()=>{if(karyawanData[n]>0){karyawanData[n]--;saveLocal();renderKaryawanList();}};
+        card.append(name,pts,val,plus,min);
+        cont.appendChild(card);
+      });
+      document.getElementById("total-value").textContent=`Total Uang Masuk: ${formatRupiah(total)}`;
+    };
+
+    /* === Minuman === */
+    const renderDrinkList=()=>{
+      const cont=document.getElementById("drink-list");cont.innerHTML="";let total=0;
+      drinkList.forEach(d=>{
+        if(!drinkData[d.name])drinkData[d.name]=0;
+        const card=document.createElement("div");card.className="product-card";
+        const name=document.createElement("span");name.className="name";name.textContent=d.name;
+        const qty=document.createElement("span");qty.className="point";qty.textContent=drinkData[d.name];
+        const val=document.createElement("span");const v=d.price*drinkData[d.name];val.className="value";val.textContent=formatRupiah(v);total+=v;
+        const plus=document.createElement("button");plus.textContent="+";plus.onclick=()=>{drinkData[d.name]++;recordDaily(d.price);saveLocal();renderDrinkList();};
+        const min=document.createElement("button");min.textContent="-";min.onclick=()=>{if(drinkData[d.name]>0){drinkData[d.name]--;saveLocal();renderDrinkList();}};
+        card.append(name,qty,val,plus,min);
+        cont.appendChild(card);
+      });
+      document.getElementById("total-drinks").textContent=`Total Minuman: ${formatRupiah(total)}`;
+    };
+
+    /* === Kasbon === */
+    const renderKasbon=()=>{
+      const body=document.getElementById("kasbon-tbody");body.innerHTML="";
+      kasbonData.forEach((row,i)=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`<td>${row.date}</td><td>${row.karyawan}</td><td>${row.item}</td><td class="num">${formatRupiah(row.value)}</td><td class="actions"><button class="del-btn" data-index="${i}">Hapus</button></td>`;
+        body.appendChild(tr);
+      });
+      body.querySelectorAll(".del-btn").forEach(btn=>{
+        btn.onclick=()=>{kasbonData.splice(btn.dataset.index,1);saveLocal();renderKasbon();};
+      });
+    };
+
+    /* === Pengeluaran === */
+    const renderPengeluaran = () => {
+      const tbody = document.getElementById("pengeluaran-tbody");
+      tbody.innerHTML = "";
+      pengeluaranToko.forEach((row, i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${row.date}</td><td>${row.item}</td><td class="num">${formatRupiah(row.amount)}</td><td class="actions"><button class="del-btn" data-index="${i}">Hapus</button></td>`;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll(".del-btn").forEach(btn => {
+        btn.onclick = () => {
+          const i = btn.dataset.index;
+          const date = pengeluaranToko[i].date;
+          const val = pengeluaranToko[i].amount;
+          if (laporanHarian[date]?.expense) {
+            laporanHarian[date].expense -= val;
+            if (laporanHarian[date].expense < 0) laporanHarian[date].expense = 0;
+          }
+          pengeluaranToko.splice(i, 1);
+          saveLocal();renderPengeluaran();renderHistory();renderChart();
+        };
+      });
+    };
+
+    /* === Layanan === */
+    const renderLayanan = () => {
+      const body = document.getElementById("layanan-tbody");
+      body.innerHTML = "";
+      layananData.forEach((row, i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${row.date}</td>
+          <td>${row.nama}</td>
+          <td class="num">${formatRupiah(row.nominal)}</td>
+          <td class="actions"><button class="del-btn" data-index="${i}">Hapus</button></td>
+        `;
+        body.appendChild(tr);
+      });
+      body.querySelectorAll(".del-btn").forEach(btn => {
+        btn.onclick = () => { layananData.splice(btn.dataset.index, 1); saveLocal(); renderLayanan(); };
+      });
+    };
+
+    /* === Laporan Harian + Traffic === */
+    function recordDaily(amount) {
+      const today = new Date().toLocaleDateString("id-ID");
+      if (!laporanHarian[today]) laporanHarian[today] = { income: 0, expense: 0 };
+      if (typeof laporanHarian[today] === "number") laporanHarian[today] = { income: laporanHarian[today], expense: 0 };
+      laporanHarian[today].income += amount;
+      if (!trafficData[today]) trafficData[today] = 0;
+      trafficData[today] += 1;
+      saveLocal(); renderChart(); renderTrafficChart();
+    }
+
+    function renderTrafficChart() {
+      const ctx = document.getElementById('chart-traffic').getContext('2d');
+      const labels = Object.keys(trafficData);
+      const data = Object.values(trafficData);
+      if (window.chartTraffic) window.chartTraffic.destroy();
+      window.chartTraffic = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets: [{ label: 'Aktivitas Harian', data, borderColor: '#5a189a', backgroundColor: 'rgba(123, 44, 191, 0.1)', tension: 0.2, pointRadius: 4, fill: true }]},
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    function renderChart(){
+      const ctx=document.getElementById('chart-harian').getContext('2d');
+      const labels=Object.keys(laporanHarian);
+      const data = Object.values(laporanHarian).map(v => (typeof v === "number" ? v : v.income || 0));
+      if(window.chartHarian) window.chartHarian.destroy();
+      window.chartHarian=new Chart(ctx,{ type:'bar', data:{labels,datasets:[{label:'Pendapatan Harian',data,backgroundColor:'#7b2cbf'}]}, options:{responsive:true,scales:{y:{beginAtZero:true}}}});
+    }
+
+    /* === History === */
+    const renderHistory = () => {
+      const tbody = document.getElementById("history-tbody");
+      tbody.innerHTML = "";
+      const entries = Object.entries(laporanHarian).sort((a,b) => new Date(b[0]) - new Date(a[0]));
+      entries.forEach(([date, data]) => {
+        const pemasukan = typeof data === "number" ? data : (data.income || 0);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${date}</td><td>${formatRupiah(pemasukan)}</td>`;
+        tbody.appendChild(tr);
+      });
+    };
+
+    /* === Kalkulator === */
+    document.getElementById("calculate-btn").onclick=()=>{
+      const a=cleanNumber(document.getElementById("amount-received").value);
+      const t=cleanNumber(document.getElementById("total-price").value);
+      if(!t){document.getElementById("change-result").textContent="Isi total harga";return;}
+      const ch=a-t;
+      if(document.getElementById("payment-method").value==="qris"){
+        document.getElementById("change-result").textContent=`QRIS dibayar: ${formatRupiah(t)}`;
+        recordDaily(t);
+      }else{
+        document.getElementById("change-result").textContent= ch>=0 ? `Kembalian: ${formatRupiah(ch)}` : "Uang Kurang!";
+        if(ch>=0) recordDaily(t);
+      }
+    };
+    document.getElementById("reset-calc").onclick=()=>{
+      document.getElementById("amount-received").value="";
+      document.getElementById("total-price").value="";
+      document.getElementById("change-result").textContent="";
+    };
+
+    /* === Event Kasbon & Layanan === */
+    document.getElementById("kasbon-add-btn").onclick=()=>{
+      const k=document.getElementById("kasbon-karyawan").value;
+      const i=document.getElementById("kasbon-item").value||"Lainnya";
+      const a=cleanNumber(document.getElementById("kasbon-amount").value);
+      if(a<=0){alert("Nominal harus > 0");return;}
+      kasbonData.push({date:new Date().toLocaleDateString("id-ID"),karyawan:k,item:i,value:a});
+      saveLocal();renderKasbon();
+    };
+
+    document.getElementById("kasbon-reset-btn").onclick=()=>{
+      if(confirm("Reset kasbon?")){
+        kasbonData.length=0;
+        saveLocal();renderKasbon();
+      }
+    };
+
+    document.getElementById("layanan-add-btn").onclick = () => {
+      const selected = document.getElementById("layanan-select").value;
+      const [namaLayanan, nominalStr] = selected.split("|");
+      const nominal = parseInt(nominalStr);
+      if (!nominal || nominal <= 0) { alert("Nominal tidak valid"); return; }
+
+      layananData.push({
+        date: new Date().toLocaleDateString("id-ID"),
+        nama: namaLayanan,
+        nominal: nominal
+      });
+
+      recordDaily(nominal);
+      saveLocal();
+      renderLayanan();
+    };
+
+    /* === Event Pengeluaran === */
+    document.getElementById("pengeluaran-add").onclick = () => {
+      const item = document.getElementById("pengeluaran-item").value || "Lainnya";
+      const nominal = cleanNumber(document.getElementById("pengeluaran-nominal").value);
+      const date = document.getElementById("pengeluaran-tanggal").value;
+      if (!date || nominal <= 0) { alert("Tanggal dan nominal wajib diisi"); return; }
+
+      pengeluaranToko.push({ date, item, amount: nominal });
+
+      if (!laporanHarian[date]) laporanHarian[date] = { income: 0, expense: 0 };
+      if (typeof laporanHarian[date] === "number") {
+        laporanHarian[date] = { income: laporanHarian[date], expense: 0 };
+      }
+      laporanHarian[date].expense += nominal;
+
+      saveLocal();renderPengeluaran();renderHistory();renderChart();
+    };
+
+    document.getElementById("pengeluaran-reset").onclick = () => {
+      if (confirm("Reset semua pengeluaran toko?")) {
+        pengeluaranToko.length = 0;
+        for (const tgl in laporanHarian) {
+          if (typeof laporanHarian[tgl] !== "number") {
+            laporanHarian[tgl].expense = 0;
+          }
+        }
+        saveLocal();renderPengeluaran();renderHistory();renderChart();
+      }
+    };
+
+    /* === Menu Toggle === */
+    const menuBtns = {
+      "menu-karyawan": "panel-karyawan",
+      "menu-minuman": "panel-minuman",
+      "menu-laporan": "panel-laporan",
+      "menu-history": "panel-history",
+      "menu-calc": "panel-calc"
+    };
+    Object.keys(menuBtns).forEach(id => {
+      document.getElementById(id).onclick = () => {
+        document.querySelectorAll(".menu button").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+        document.getElementById(id).classList.add("active");
+        document.getElementById(menuBtns[id]).classList.add("active");
+      };
+    });
+
+    /* === Init === */
+    document.getElementById("kasbon-karyawan").innerHTML =
+      karyawanList.map(n=>`<option>${n}</option>`).join("");
+
+    document.getElementById("reset-karyawan").onclick=()=>{
+      if(confirm("Reset data karyawan?")){
+        karyawanList.forEach(n=>karyawanData[n]=0);
+        saveLocal();renderKaryawanList();
+      }
+    };
+    document.getElementById("reset-minuman").onclick=()=>{
+      if(confirm("Reset data minuman?")){
+        drinkList.forEach(d=>drinkData[d.name]=0);
+        saveLocal();renderDrinkList();
+      }
+    };
+
+    renderKaryawanList();
+    renderDrinkList();
+    renderKasbon();
+    renderPengeluaran();
+    renderLayanan();
+    renderHistory();
+    renderChart();
+    renderTrafficChart();
+
+    /* === Event Handlers for Gaji and History === */
+    document.getElementById("calc-gaji").onclick = () => {
+      const div = document.getElementById("gaji-list");
+      div.innerHTML = "";
+      karyawanList.forEach(n => {
+        const points = karyawanData[n] || 0;
+        const gaji = calcKaryawanValue(n, points);
+        const totalKasbon = kasbonData.filter(x => x.karyawan === n).reduce((a, b) => a + b.value, 0);
+        const bersih = gaji - totalKasbon;
+        const p = document.createElement("p");
+        p.innerHTML = `<strong>${n}:</strong> ${formatRupiah(gaji)} - Kasbon (${formatRupiah(totalKasbon)}) = <span style="color:${bersih < 0 ? 'red' : 'green'}">${formatRupiah(bersih)}</span>`;
+        div.appendChild(p);
+      });
+    };
+
+    document.getElementById("history-add-btn").onclick = () => {
+      const dateInput = document.getElementById("history-date").value;
+      const amountInput = cleanNumber(document.getElementById("history-amount").value);
+      if (!dateInput) {
+        alert("Tanggal harus diisi");
+        return;
+      }
+      if (amountInput < 0) {
+        alert("Jumlah pemasukan harus >= 0");
+        return;
+      }
+      laporanHarian[dateInput] = amountInput;
+      saveLocal();
+      renderHistory();
+      renderChart();
+      alert("Data pemasukan harian berhasil disimpan");
+    };
+
+    /* === Auto Format Input === */
+    const autoFormat = (el) => el.addEventListener('input', () => {
+      const n = cleanNumber(el.value); el.value = n ? n.toLocaleString('id-ID') : "";
+    });
+    [
+      document.getElementById("kasbon-amount"),
+      document.getElementById("amount-received"),
+      document.getElementById("total-price"),
+      document.getElementById("history-amount"),
+      document.getElementById("pengeluaran-nominal")
+    ].forEach(el => el && autoFormat(el));
+  </script>
+</body>
+</html>
