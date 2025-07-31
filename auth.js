@@ -5,7 +5,7 @@
 // Get accounts from localStorage or initialize with default admin account
 function getAccounts() {
   let accounts = JSON.parse(localStorage.getItem('accounts'));
-  if (!accounts) {
+  if (!accounts || !Array.isArray(accounts)) {
     // Initialize with default admin account
     accounts = [
       { username: 'admin', password: 'admin123', role: 'admin' },
